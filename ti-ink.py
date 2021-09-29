@@ -19,7 +19,7 @@ _BackGroundLayer = ti.Vector.field(3, dtype=float, shape=(res, res))
 _FrameBuffer = ti.Vector.field(3, dtype=float, shape=(res, res))
 cursor = ti.field(float, shape=2)
 currentColor = ti.Vector.field(4,dtype=float,shape=2)
-currentColor[0]=ti.Vector([0.0, 0.4, 0.25, 0.5])
+currentColor[0]=ti.Vector([0.0, 0.4, 0.25, 0.2])
 currentColor[1]=ti.Vector([1.0, 0.0, 0.0, 1.0])
 _paper = ti.field(dtype=float, shape=(res, res))
 _fibers = ti.field(dtype=float, shape=(res, res))
@@ -135,7 +135,7 @@ def update_Feq():
         for j in ti.static(range(9)):
             _FlowVelocity[P] += _Flow[P][j]*e[j]
         for i in ti.static(range(9)):
-            _Feq[P][i] = w[i]*(_rou[P] + tg.scalar.smoothstep(0, alpha, _rou[P])*(3 * e[i].dot(_FlowVelocity[P]) +
+            _Feq[P][i] = w[i]*(_rou[P] + tg.scalar.smoothstep( alpha,0, _rou[P])*(3 * e[i].dot(_FlowVelocity[P]) +
                                4.5 * (e[i].dot(_FlowVelocity[P]))**2 - 1.5 * _FlowVelocity[P].dot(_FlowVelocity[P])))
 
 
@@ -160,9 +160,9 @@ def fill_BG():
 def render():
     for P in ti.grouped(_FrameBuffer):
         for i in ti.static(range(3)):
-            _FrameBuffer[P][i] = tg.scalar.mix(_BackGroundLayer[P][i],currentColor[0][i],_Fixture[P][3])
-            _FrameBuffer[P][i] = tg.scalar.mix(_FrameBuffer[P][i],currentColor[0][i],_Pigment_flow[P][3])
-            # _FrameBuffer[P][i] = tg.scalar.mix(_BackGroundLayer[P][i],currentColor[0][i],_Water_Surface[P])
+            # _FrameBuffer[P][i] = tg.scalar.mix(_BackGroundLayer[P][i],currentColor[0][i],_Fixture[P][3])
+            # _FrameBuffer[P][i] = tg.scalar.mix(_FrameBuffer[P][i],currentColor[0][i],_Pigment_flow[P][3])
+            _FrameBuffer[P][i] = tg.scalar.mix(_BackGroundLayer[P][i],currentColor[0][i],_rou[P])
 @ti.kernel
 def drawStrok(color:ti.template(),i:int,radius: ti.f32):
     center = ti.Vector([cursor[0], cursor[1]])
@@ -173,7 +173,7 @@ def drawStrok(color:ti.template(),i:int,radius: ti.f32):
             brush_tip = tg.scalar.clamp(dis/radius, 0, 1)
             _Water_Surface[P] += min(1-mask, 1-_rou[P]/0.5)
             _Pigment_Surface[P] = color[i]
-            _Pigment_Surface[P][3] += min(1-mask, 1-_rou[P]/0.5)*color[i][3]
+            _Pigment_Surface[P][3] += min(1-mask*color[i][3], 1-_rou[P]/0.5)
             _kar[P] = _paper[P]
 
 psy=ti.field(dtype=float,shape=(res,res))
@@ -223,22 +223,22 @@ def _update_rouPre():
         _rouPre[P]=_rou[P]
 
 
-miu=0.1
-ksy=0.8
-niu=0.01
+miu=-0.2
+ksy=0.5
+niu=0.1
 @ti.kernel
 def update_Fixture():
     for P in ti.grouped(_Fixture):
         fixFactor=0.0
-        wLoss=max(_rou[P]-_rouPre[P],0)
+        wLoss=max(_rouPre[P]-_rou[P],0)
         if (wLoss>0):
-            fixFactor=wLoss/_rou[P]
+            fixFactor=wLoss/_rouPre[P]
         u_star=tg.scalar.clamp(miu+ksy*_Pigment_flow[P][3],0,1.0)
-        fixFactor=max(fixFactor*(1-tg.scalar.smoothstep(0,u_star,_rouPre[P])),niu)
+        fixFactor=max(fixFactor*(1-tg.scalar.smoothstep(u_star,0,_rou[P])),niu)
         tempV=fixFactor*_Pigment_flow[P]
         _Fixture[P]+=tempV
         _Fixture[P][3]=tg.scalar.clamp(_Fixture[P][3])
-        _Pigment_flow[P]-=tempV
+        _Pigment_flow[P][3]=tg.scalar.clamp(_Pigment_flow[P][3]-tempV[3])
 
 
 @ti.kernel
