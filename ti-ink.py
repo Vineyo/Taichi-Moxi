@@ -5,7 +5,7 @@ from taichi_glsl.experimental_array import dtype
 ti.init(arch=ti.cuda)
 
 res = 512
-brushRadius = 0.05
+brushRadius = 0.03
 
 
 _Pigment_Surface = ti.Vector.field(4, dtype=float, shape=(res, res))
@@ -19,7 +19,7 @@ _BackGroundLayer = ti.Vector.field(3, dtype=float, shape=(res, res))
 _FrameBuffer = ti.Vector.field(3, dtype=float, shape=(res, res))
 cursor = ti.field(float, shape=2)
 currentColor = ti.Vector.field(4, dtype=float, shape=2)
-currentColor[0] = ti.Vector([0.0, 0.4, 0.25, 0.8])
+currentColor[0] = ti.Vector([0.0, 0.4, 0.25, 0.5])
 currentColor[1] = ti.Vector([0.0, 0.1, 0.2, 0.0])
 _paper = ti.field(dtype=float, shape=(res, res))
 _fibers = ti.field(dtype=float, shape=(res, res))
@@ -51,11 +51,11 @@ k = (0, 3, 4, 1, 2, 7, 8, 5, 6)
 w = (4.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/9.0, 1.0 /
      9.0, 1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0)
 
-# if(True):
-#     w = (4.0/9.0, 0.8/9.0, 1.0/9.0, 1.2/9.0, 1.0 /
-#          9.0, 1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0)
+if(True):
+    w = (4.0/9.0, 0.98/9.0, 1.0/9.0, 1.02/9.0, 1.0 /
+         9.0, 1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0)
 
-q1 = 0.01
+q1 = 0.001
 q2 = 0.9
 q3 = 0.5
 
@@ -166,11 +166,11 @@ def fill_BG():
 def render():
     for P in ti.grouped(_FrameBuffer):
         for i in ti.static(range(3)):
-            # _FrameBuffer[P][i] = tg.scalar.mix(_BackGroundLayer[P][i],currentColor[0][i],_Pigment_Surface[P][3])
+            _FrameBuffer[P][i] = tg.scalar.mix(_BackGroundLayer[P][i],currentColor[0][i],_Pigment_Surface[P][3])
             _FrameBuffer[P][i] = tg.scalar.mix(
                 _BackGroundLayer[P][i], currentColor[0][i], _Pigment_flow[P][3])
             # _FrameBuffer[P][i] = tg.scalar.mix(_FrameBuffer[P][i],currentColor[0][i],_Fixture[P][3])
-            # _FrameBuffer[P][i] = tg.scalar.mix(_FrameBuffer[P][i],currentColor[1][i],_rou[P]*0.5)
+            _FrameBuffer[P][i] = tg.scalar.mix(_FrameBuffer[P][i],currentColor[1][i],_rou[P]*0.5)
 
 
 @ti.kernel
@@ -195,7 +195,7 @@ psy = ti.field(dtype=float, shape=(res, res))
 @ti.kernel
 def waterSurface_to_flow():
     for P in ti.grouped(_Flow):
-        psy[P] = tg.scalar.clamp(_Water_Surface[P], 0, 0.8-_rou[P])
+        psy[P] = tg.scalar.clamp(_Water_Surface[P], 0, 1.0-_rou[P])
         _Flow[P][0] += psy[P]
         _Water_Surface[P] -= psy[P]
 
@@ -209,9 +209,9 @@ def Pigment_S_to_F():
 
         if (psy[P] > 0):
             denom = (_rou[P]+psy[P])
-            _Pigment_flow[P] = (_Pigment_flow[P]*_rou[P] +
-                                _Pigment_Surface[P]*psy[P])/denom
-            # _Pigment_flow[P][3]=tg.scalar.clamp(_Pigment_flow[P][3],0,1)
+            # _Pigment_flow[P] = (_Pigment_flow[P]*_rou[P] +
+            #                     _Pigment_Surface[P]*psy[P])/denom
+            _Pigment_flow[P][3]=tg.scalar.clamp(_Pigment_flow[P][3]+psy[P]*_Pigment_Surface[P][3]/denom,0,1)
             _Pigment_Surface[P][3] = tg.scalar.clamp(
                 _Pigment_Surface[P][3]-(psy[P]/denom), 0, 1)
 
