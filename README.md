@@ -1,5 +1,5 @@
 # Taichi-Moxi
-A real-time ink dipersion engine called Moxi implimented with Taichi language.
+An instantiation of a real-time ink dispersion engine called Moxi implimented with Taichi language.
 
 ## Demo
 ![demo](ti_moxi.gif)
