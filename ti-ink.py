@@ -60,15 +60,15 @@ if(True):
     w = (4.0/9.0, 0.95/9.0, 1.0/9.0, 1.05/9.0, 1.0 /
          9.0, 1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0)
 
-q1 = 0.001
+q1 = -0.05
 q2 = 0.9
-q3 = 0.5
+q3 = 0.9
 
 
 @ti.kernel
 def ini_sigma():
     for P in ti.grouped(_sigma):
-        _sigma[P] = q1+q2*_fibers[P]
+        _sigma[P] = q1+q2*_fibers[P]+q3*_paper[P]
 
 
 @ti.kernel
@@ -283,7 +283,7 @@ ini_sigma()
 cursor[0] = 0.5
 cursor[1] = 0.5
 # ini_to_0(_Pigment_Surface.rgb)
-# ini_to_1(_Pigment_flow_c)
+ini_to_1(_Pigment_flow_c)
 # ini_to_0(_Fixture)
 while gui.running:
 
