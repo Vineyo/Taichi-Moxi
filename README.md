@@ -2,8 +2,8 @@
 An instantiation of a real-time ink dispersion engine called Moxi implimented with Taichi language.
 
 ## Usage
-Just run the .py file.
-Left-click to draw green color, right click to draw yellow.
+Just run the demo.py file.
+Left-click to draw, right click to change color.
 
 ## Demo
 ![demo](ti_moxi.gif)
