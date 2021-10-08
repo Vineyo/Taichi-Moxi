@@ -2,7 +2,7 @@ import taichi as ti
 import matplotlib.image as mpig
 import taichi_glsl as tg
 
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cpu)
 
 @ti.data_oriented
 class Taichi_Moxi:
