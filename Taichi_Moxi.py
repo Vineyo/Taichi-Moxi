@@ -54,7 +54,7 @@ class Taichi_Moxi:
         self.FrameBuffer=ti.Vector.field(3, dtype=float, shape=(res, res))
         self.BackgrounLayer=ti.Vector.field(3, dtype=float, shape=(res, res))
         self.paper.from_numpy(mpig.imread("paper_512_2.png")[:, :, 0])
-        self.fibers.from_numpy(mpig.imread("fibers_512_3.png")[:, :, 0])
+        self.fibers.from_numpy(mpig.imread("fibers_512_2.png")[:, :, 0])
         self.ini_k()
         self.update_kar_avg()
         self.set_edge_parameters()
