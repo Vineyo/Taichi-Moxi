@@ -1,5 +1,5 @@
 # Taichi-Moxi
-An instantiation of a real-time ink dispersion engine called Moxi implimented with Taichi language.
+An instantiation of a real-time ink dispersion engine called Moxi implimented with Taichi language. Supporting sparse caculation.
 
 ## Usage
 Just run the demo.py file.
