@@ -6,7 +6,7 @@ Just run the demo.py file.
 Left-click to draw, right click to change color.
 
 ## Demo
-![sparse demo](ti_moxi_sparse.gif)
+![sparse demo](demo.gif)
 
 ## Refernces
 [Moxi thesis](http://visgraph.cse.ust.hk/MoXi/moxi.pdf)
