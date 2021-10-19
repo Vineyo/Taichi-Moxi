@@ -2,7 +2,7 @@ import taichi as ti
 import matplotlib.image as mpig
 import taichi_glsl as tg
 
-ti.init(arch=ti.cuda, excepthook=True)
+ti.init(arch=ti.cuda, excepthook=True,kernel_profiler=True)
 
 
 @ti.data_oriented
@@ -13,6 +13,7 @@ class Taichi_Moxi:
         self.k = (0, 3, 4, 1, 2, 7, 8, 5, 6)
         self.res = res
         self.brushRadius = 0.03
+        self.alpha = 0.1
         self.omiga = 0.5
         self.q1 = -0.005
         self.q2 = 0.9
@@ -75,7 +76,7 @@ class Taichi_Moxi:
 
         self.pigment_flow_rate = ti.field(float, shape=())
         self.pigment_flow_rate[None] = 4
-        self.paper.from_numpy(mpig.imread("paper_512_2.png")[:, :, 0])
+        self.paper.from_numpy(mpig.imread("paper_512_3.png")[:, :, 0])
         self.fibers.from_numpy(mpig.imread("fibers_512_2.png")[:, :, 0])
         self.ini_k()
         self.update_kar_avg()
@@ -136,8 +137,7 @@ class Taichi_Moxi:
             for i in ti.static(range(9)):
                 prePos = P-self.e[i]
                 self.FlowNext[P][i] = self.omiga * \
-                    (self.Feq[prePos][i]-self.Flow[prePos][i]) + \
-                    self.Feq[prePos][i]
+                    (self.Feq[prePos][i]-self.Flow[prePos][i]) + self.Feq[prePos][i]
 
     @ti.kernel
     def update_flow(self):
@@ -150,14 +150,19 @@ class Taichi_Moxi:
 
     @ti.kernel
     def update_Feq(self):
-        alpha = 0.3
+        
         for P in ti.grouped(self.rho):
-            self.FlowVelocity[P] = ti.Vector([0.0, 0.0])
-            for j in ti.static(range(1, 9)):
-                self.FlowVelocity[P] += self.Flow[P][j]*self.e[j]
+            self.FlowVelocity[P] = self.Flow[P][1]*self.e[1]+\
+                                    self.Flow[P][2]*self.e[2]+\
+                                    self.Flow[P][3]*self.e[3]+\
+                                    self.Flow[P][4]*self.e[4]+\
+                                    self.Flow[P][5]*self.e[5]+\
+                                    self.Flow[P][6]*self.e[6]+\
+                                    self.Flow[P][7]*self.e[7]+\
+                                    self.Flow[P][8]*self.e[8]
             for i in ti.static(range(9)):
-                self.Feq[P][i] = self.w[i]*(self.rho[P] + tg.scalar.smoothstep(self.rho[P], 0, alpha)*(3 * self.e[i].dot(self.FlowVelocity[P]) +
-                                                                                                       4.5 * (self.e[i].dot(self.FlowVelocity[P]))**2 - 1.5 * self.FlowVelocity[P].dot(self.FlowVelocity[P])))
+                self.Feq[P][i] = self.w[i]*(self.rho[P] + tg.scalar.smoothstep(self.rho[P], 0, self.alpha)*(3 * self.e[i].dot(self.FlowVelocity[P]) +
+                                            4.5 * (self.e[i].dot(self.FlowVelocity[P]))**2 - 1.5 * self.FlowVelocity[P].dot(self.FlowVelocity[P])))
 
     @ti.kernel
     def drawStrok(self):
@@ -198,16 +203,17 @@ class Taichi_Moxi:
     @ti.kernel
     def update_Pf_star(self):
         for P in ti.grouped(self.Pigment_flow_c):
+            v=self.pigment_flow_rate[None]*self.FlowVelocity[P]
             self.Pigment_flow_star_c[P] = tg.sampling.bilerp(
-                self.Pigment_flow_c, P-self.pigment_flow_rate[None]*self.FlowVelocity[P])
+                self.Pigment_flow_c, P-v)
             self.Pigment_flow_star_a[P] = tg.sampling.bilerp(
-                self.Pigment_flow_a, P-self.pigment_flow_rate[None]*self.FlowVelocity[P])
+                self.Pigment_flow_a, P-v)
 
     @ti.kernel
     def update_Pf(self):
         for P in ti.grouped(self.Pigment_flow_c):
             gama_star = tg.scalar.mix(1, 0.1, tg.scalar.smoothstep(
-                self.FlowVelocity[P].norm()*self.pigment_flow_rate[None], 0, 0.1))
+                self.FlowVelocity[P].norm()*self.pigment_flow_rate[None], 0, 0.01))
             self.Pigment_flow_a[P] = (self.Pigment_flow_a[P]-self.Pigment_flow_star_a[P]
                                       )*gama_star+self.Pigment_flow_star_a[P]
             self.Pigment_flow_c[P] = (self.Pigment_flow_c[P]-self.Pigment_flow_star_c[P]
@@ -219,7 +225,7 @@ class Taichi_Moxi:
             s_index = ti.rescale_index(self.Flow, self.s1, [i, j])
             if (ti.is_active(self.s1, s_index)):
                 self.FrameBuffer[i, j] = tg.scalar.mix(
-                     self.BackgrounLayer[i, j], self.Pigment_flow_c[i, j], self.Pigment_flow_a[i, j])
+                        self.BackgrounLayer[i, j], self.Pigment_flow_c[i, j], self.Pigment_flow_a[i, j])
                 self.FrameBuffer[i, j] = tg.scalar.mix(
                     self.FrameBuffer[i, j], self.Pigment_Surface_c[i,j], self.Pigment_Surface_a[i, j])
                 self.FrameBuffer[i, j] = tg.scalar.mix(
