@@ -1,9 +1,5 @@
 import taichi as ti
 import matplotlib.image as mpig
-import taichi_glsl as tg
-
-ti.init(arch=ti.cuda, packed=True)#,kernel_profiler=True)
-
 
 @ti.data_oriented
 class Taichi_Moxi:
@@ -12,13 +8,9 @@ class Taichi_Moxi:
 
         self.k = (0, 3, 4, 1, 2, 7, 8, 5, 6)
         self.res = res
-        
         self.alpha = 0.2
         self.omiga = 0.1
-        self.q1 = ti.field(float, shape=())
-        self.q2 = ti.field(float, shape=())
-        self.q3 = ti.field(float, shape=())
-        self.brushRadius = ti.field(float, shape=())
+        self.q = ti.field(float, shape=3)
         self.pigment_flow_rate = ti.field(float, shape=())
         self.currntColor = ti.field(float, shape=4)
         self.cursor = ti.field(float, shape=2)
@@ -45,7 +37,7 @@ class Taichi_Moxi:
         self.FlowVelocity = ti.Vector.field(2, dtype=float)
 
         self.s0 = ti.root
-        self.s1 = self.s0.pointer(ti.ij, 16)
+        self.s1 = self.s0.dense(ti.ij, int(self.res/32))
         self.s2 = self.s1.dense(ti.ij, 8)
         self.s3 = self.s2.dense(ti.ij, 4)
 
@@ -56,7 +48,7 @@ class Taichi_Moxi:
         self.s3.place(self.FlowVelocity)
 
         if gravity:
-            self.w = ti.Vector([4.0/9.0, 0.9/9.0, 1.0/9.0, 1.1/9.0, 1.0 /
+            self.w = ti.Vector([4.0/9.0, 0.95/9.0, 1.0/9.0, 1.05/9.0, 1.0 /
                                 9.0, 1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0])
         else:
             self.w = ti.Vector([4.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/9.0, 1.0 /
@@ -78,15 +70,14 @@ class Taichi_Moxi:
         self.pigment_flow_rate[None] = 4
         self.ini_k()
         self.update_kappa_avg()
-        self.set_edge_parameters()
-        self.set_brush_radius()
+        self.set_edge_parameters(q1=-0.01, q2=.07, q3=0.2)
         self.update_sigma()
         self.fill_BG()
 
     @ti.kernel
     def fill_BG(self):
         for p in ti.grouped(self.BackgrounLayer):
-            self.BackgrounLayer[p] = ti.Vector([1, 1, 1])
+            self.BackgrounLayer[p] = ti.Vector([1., 1., 1.])
 
     @ti.kernel
     def ini_k(self):
@@ -102,8 +93,8 @@ class Taichi_Moxi:
     @ti.kernel
     def update_sigma(self):
         for P in ti.grouped(self.sigma):
-            self.sigma[P] = self.q1+self.q2 * \
-                self.fibers[P]+self.q3*self.paper[P]
+            self.sigma[P] = self.q[0]+self.q[1] * \
+                self.fibers[P]+self.q[2]*self.paper[P]
 
     @ti.kernel
     def update_k_for_pinning(self):
@@ -117,7 +108,7 @@ class Taichi_Moxi:
                 self.rho[P+self.e[6]] < (self.sigma[P+self.e[6]]*1.41421356) and
                 self.rho[P+self.e[7]] < (self.sigma[P+self.e[7]]*1.41421356) and
                     self.rho[P+self.e[8]] < (self.sigma[P+self.e[8]]*1.41421356)):
-                self.kappa[P] = 0.99
+                self.kappa[P] = 0.5
 
     @ti.kernel
     def update_rho(self):
@@ -128,14 +119,14 @@ class Taichi_Moxi:
     def update_FlowNext(self):
         for P in ti.grouped(self.Flow):
             for i in ti.static(range(9)):
-                prePos = tg.scalar.clamp(P-self.e[i],0,self.res-1)
-                self.FlowNext[P][i]=tg.scalar.mix(self.Feq[prePos][i],self.Flow[prePos][i],self.omiga)
+                prePos = clamp(P-self.e[i],0,self.res-1)
+                self.FlowNext[P][i]=mix(self.Feq[prePos][i],self.Flow[prePos][i],self.omiga)
 
     @ti.kernel
     def update_flow(self):
         for P in ti.grouped(self.FlowNext):
             for i in ti.static(range(9)):
-                prePos = tg.scalar.clamp(P-self.e[i],0,self.res-1)
+                prePos = clamp(P-self.e[i],0,self.res-1)
                 self.Flow[P][i] = self.kappa_avg[P][i] * \
                     (self.FlowNext[P][self.k[i]] - self.FlowNext[prePos][i]) + \
                     self.FlowNext[prePos][i]
@@ -153,24 +144,24 @@ class Taichi_Moxi:
                                     self.Flow[P][7]*self.e[7]+\
                                     self.Flow[P][8]*self.e[8]
             for i in ti.static(range(9)):
-                self.Feq[P][i] = self.w[i]*(self.rho[P] + tg.scalar.smoothstep(self.rho[P], 0, self.alpha)*(3 * self.e[i].dot(self.FlowVelocity[P]) +
+                self.Feq[P][i] = self.w[i]*(self.rho[P] + smoothstep(self.rho[P], 0, self.alpha)*(3 * self.e[i].dot(self.FlowVelocity[P]) +
                                             4.5 * (self.e[i].dot(self.FlowVelocity[P]))**2 - 1.5 * self.FlowVelocity[P].dot(self.FlowVelocity[P])))
 
     @ti.kernel
-    def drawStrok(self):
+    def drawStrok(self,brushRadius:float):
         center = ti.Vector([self.cursor[0], self.cursor[1]])
         for i, j in ti.ndrange(self.res, self.res):
             dis = (ti.Vector([i, j])/self.res-center).norm()
-            if dis < self.brushRadius:
-                # brush_tip = tg.scalar.clamp(1-dis/self.brushRadius, 0, 1)
-                water_mask=max(1-self.rho[i, j]/0.5, 0.2)
+            if dis < brushRadius:
+                brush_tip = clamp(1-dis/brushRadius, 0, 1)
+                water_mask=max(1-self.rho[i, j]/0.5, 0.1)
                 self.Water_Surface[i, j] += water_mask
-                self.Water_Surface[i, j] = tg.scalar.clamp(
+                self.Water_Surface[i, j] = clamp(
                     self.Water_Surface[i, j],0,2)
                 self.Pigment_Surface_c[i, j] = ti.Vector(
                     [self.currntColor[0], self.currntColor[1], self.currntColor[2]])
-                self.Pigment_Surface_a[i, j] += water_mask*self.currntColor[3]
-                self.Pigment_Surface_a[i, j]=tg.scalar.clamp(self.Pigment_Surface_a[i, j])
+                self.Pigment_Surface_a[i, j] += brush_tip*self.currntColor[3]
+                self.Pigment_Surface_a[i, j]=clamp(self.Pigment_Surface_a[i, j])
                 self.kappa[i, j] = self.paper[i, j]
 
  
@@ -178,7 +169,7 @@ class Taichi_Moxi:
     def water_pigment_surface_to_flow(self):
         for P in ti.grouped(self.Water_Surface):
             if self.Water_Surface[P] > 0:
-                phi = tg.scalar.clamp(
+                phi = clamp(
                     self.Water_Surface[P], 0, 1.0-self.rho[P])
                 self.Flow[P][0] += phi
 
@@ -188,23 +179,23 @@ class Taichi_Moxi:
                     self.Pigment_flow_c[P] = (self.Pigment_flow_c[P]*self.Pigment_flow_a[P] +
                                             self.Pigment_Surface_c[P]*b) / (self.Pigment_flow_a[P]+b)
 
-                    self.Pigment_flow_a[P] = tg.scalar.clamp(
+                    self.Pigment_flow_a[P] = clamp(
                         self.Pigment_flow_a[P]+b, 0, 1)
-                    self.Pigment_Surface_a[P] = tg.scalar.clamp(
+                    self.Pigment_Surface_a[P] = clamp(
                         self.Pigment_Surface_a[P]-b, 0, 1)
     @ti.kernel
     def update_Pf_star(self):
         for P in ti.grouped(self.Pigment_flow_c):
             Ppre=P-self.pigment_flow_rate[None]*self.FlowVelocity[P]
-            self.Pigment_flow_star_c[P] = tg.sampling.bilerp(
+            self.Pigment_flow_star_c[P] = bilerp(
                 self.Pigment_flow_c, Ppre)
-            self.Pigment_flow_star_a[P] = tg.sampling.bilerp(
+            self.Pigment_flow_star_a[P] = bilerp(
                 self.Pigment_flow_a, Ppre)
 
     @ti.kernel
     def update_Pf(self):
         for P in ti.grouped(self.Pigment_flow_c):
-            gama_star = tg.scalar.mix(1, 0.005, tg.scalar.smoothstep(
+            gama_star = mix(1, 0.005, smoothstep(
                 self.FlowVelocity[P].norm()*self.pigment_flow_rate[None], 0, 0.001))
             self.Pigment_flow_a[P] = (self.Pigment_flow_a[P]-self.Pigment_flow_star_a[P]
                                       )*gama_star+self.Pigment_flow_star_a[P]
@@ -214,18 +205,19 @@ class Taichi_Moxi:
     @ti.kernel
     def render(self):
         for i, j in ti.ndrange(self.res, self.res):
-            s_index = ti.rescale_index(self.Flow, self.s1, [i, j])
-            if (ti.is_active(self.s1, s_index)):
-                self.FrameBuffer[i, j] = tg.scalar.mix(
-                        self.BackgrounLayer[i, j], self.Pigment_flow_c[i, j], self.Pigment_flow_a[i, j])
-                self.FrameBuffer[i, j] = tg.scalar.mix(
-                    self.FrameBuffer[i, j], self.Pigment_Surface_c[i,j], self.Pigment_Surface_a[i, j])
-                self.FrameBuffer[i, j] = tg.scalar.mix(
-                    self.FrameBuffer[i, j], ti.Vector([0.0, 0.2, 0.6]), self.rho[i, j]*0.5)
+            # s_index = ti.rescale_index(self.Flow, self.s1, [i, j])
+            # if (ti.is_active(self.s1, s_index)):
+            self.FrameBuffer[i, j] = mix(
+                    self.BackgrounLayer[i, j], self.Pigment_flow_c[i, j], self.Pigment_flow_a[i, j])
+            self.FrameBuffer[i, j] = mix(
+                self.FrameBuffer[i, j], self.Pigment_Surface_c[i,j], self.Pigment_Surface_a[i, j])
+            # self.FrameBuffer[i, j] = mix(
+            #     self.FrameBuffer[i, j], ti.Vector([0.0, 0.2, 0.6]), self.rho[i, j]*0.5)
 
-            else:
-                self.FrameBuffer[i, j] = ti.Vector([0.5, 0.5, 0.5])
-
+            # else:
+            #     self.FrameBuffer[i, j] = ti.Vector([0.5, 0.5, 0.5])
+            # self.FrameBuffer[i, j] = mix(
+            #     self.BackgrounLayer[i, j], ti.Vector([0.0, 0.2, 0.6]), self.rho[i, j]*0.5)
     def update(self):
         
         self.water_pigment_surface_to_flow()
@@ -244,9 +236,6 @@ class Taichi_Moxi:
         self.currntColor[2] = b
         self.currntColor[3] = a
 
-    def setBrushRadius(self, radius):
-        self.brushRadius = radius
-
     def setCursor(self, x, y):
         self.cursor[0] = x
         self.cursor[1] = y
@@ -254,10 +243,33 @@ class Taichi_Moxi:
     def setPigmentFlowRate(self, rate):
         self.pigment_flow_rate[None] = rate
 
-    def set_edge_parameters(self, q1=-0.005, q2=0.9, q3=0.9):
-        self.q1 = q1
-        self.q2 = q2
-        self.q3 = q3
+    def set_edge_parameters(self, q1=-0.05, q2=0.9, q3=0.9):
+        self.q[0] = q1
+        self.q[1] = q2
+        self.q[2] = q3
 
-    def set_brush_radius(self,r=0.03):
-        self.brushRadius[None]=r
+@ti.func
+def bilerp(filed, pos):
+    "bilinear insertion"
+    x, y = pos[0], pos[1]
+    x0 = int(x)
+    y0 = int(y)
+    x1 = x0 + 1
+    y1 = y0 + 1
+    x = x - x0
+    y = y - y0
+    return mix(mix(filed[x0, y0], filed[x1, y0], x),
+                    mix(filed[x0, y1], filed[x1, y1], x), y)
+
+@ti.func
+def clamp(x, a=0.0, b=1.0):
+    return ti.max(a, ti.min(b, x))
+
+@ti.func
+def smoothstep(edge0, edge1, x):
+    t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+@ti.func
+def mix(a, b, x):
+    return a * (1.0 - x) + b * x
