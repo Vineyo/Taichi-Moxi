@@ -66,7 +66,7 @@ class Taichi_Moxi:
         self.e[8] = ti.Vector([1, -1])
 
         self.paper.from_numpy(mpig.imread("paper_512_2.png")[:, :, 0])
-        self.fibers.from_numpy(mpig.imread("fibers_512_3.png")[:, :, 0])
+        self.fibers.from_numpy(mpig.imread("fibers_512_2.png")[:, :, 0])
         self.pigment_flow_rate[None] = 4
         self.ini_k()
         self.update_kappa_avg()
