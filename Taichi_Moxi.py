@@ -69,7 +69,7 @@ class Taichi_Moxi:
         self._paper = ti.field(float, shape=(512, 512))
         self._paper.from_numpy(mpig.imread("paper_512_2.png")[:, :, 0])
         self._fibers = ti.field(float, shape=(512, 512))
-        self._fibers.from_numpy(mpig.imread("fibers_512_3.png")[:, :, 0])
+        self._fibers.from_numpy(mpig.imread("fibers_512_2.png")[:, :, 0])
         self.init_paper_and_fibers()
         self.pigment_flow_rate[None] = 4
         self.paper_dryness[None] = 0.5
