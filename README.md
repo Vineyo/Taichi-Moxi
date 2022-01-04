@@ -11,8 +11,8 @@ Just run the demo.py file.
 
 ## Files discription
 ```
--Taichi_Moxi.py Main engine file
--demo.py GUI using Taichi_Moxi.py
+-Taichi_Moxi.py     The main engine file
+-demo.py            A GUI using Taichi_Moxi.py
 ```
 
 ## Refernces
