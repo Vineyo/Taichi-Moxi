@@ -1,4 +1,3 @@
-from numpy import dtype, int32
 import taichi as ti
 import matplotlib.image as mpig
 
