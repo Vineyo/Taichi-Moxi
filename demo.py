@@ -1,4 +1,4 @@
-from taichi.lang import collect_kernel_profile_metrics
+import taichi as ti
 from Taichi_Moxi import *
 
 pi=3.141592653589793
@@ -25,15 +25,12 @@ brush_tip=ti.Vector.field(2, dtype=ti.f32, shape=32)
 @ti.kernel
 def get_brush_tip(x: ti.f32, y: ti.f32, radius: ti.f32):
     r=radius**2
-    for i in ti.static(range(16)):
+    for i in ti.static(range(0,16)):
         brush_tip[2*i][0] = x + r * ti.cos(2*pi*i/16)
         brush_tip[2*i][1] = y + r * ti.sin(2*pi*i/16)
-        brush_tip[2*i-1][0] = brush_tip[2*i][0]
-        brush_tip[2*i-1][1] = brush_tip[2*i][1]
+        brush_tip[2*i+1][0] = x + r * ti.cos(2*pi*(i+1)/16)
+        brush_tip[2*i+1][1] = y + r * ti.sin(2*pi*(i+1)/16)
 
-# ti.clear_kernel_profile_info()
-
-# for i in range(1000):
 while window.running:
     events = window.get_events()
     cursor_pos = window.get_cursor_pos()
